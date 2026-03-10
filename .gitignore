@@ -1,0 +1,17 @@
+blitzkode.gguf
+
+checkpoints/
+
+exported/
+
+llama.cpp/
+
+models/
+
+datasets/
+
+.gradio/
+
+__pycache__/
+
+*.pyc
