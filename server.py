@@ -8,7 +8,6 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import Optional
 import llama_cpp
 import uvicorn
 from fastapi import FastAPI, Request
