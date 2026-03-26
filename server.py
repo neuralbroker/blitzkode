@@ -49,18 +49,18 @@ load_time = time.time() - start_time
 print(f"Model loaded in {load_time:.2f}s\n")
 
 # FastAPI app with config
-app = FastAPI(title="BlitzKode API", version="1.4")
+app = FastAPI(title="BlitzKode API", version="1.5")
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 # Request validation
 class GenerateRequest(BaseModel):
     prompt: str
-    temperature: float = 0.3
-    max_tokens: int = 2048
-    top_p: float = 0.9
-    top_k: int = 40
-    repeat_penalty: float = 1.1
+    temperature: float = 0.4
+    max_tokens: int = 512
+    top_p: float = 0.95
+    top_k: int = 20
+    repeat_penalty: float = 1.05
 
 MAX_PROMPT_LENGTH = 8000
 
@@ -93,7 +93,7 @@ async def health():
     return JSONResponse({
         "status": "healthy",
         "model_loaded": True,
-        "version": "1.4"
+        "version": "1.5"
     })
 
 @app.post("/generate")
@@ -128,7 +128,7 @@ async def generate(req: GenerateRequest, request: Request):
             "response": response,
             "creator": "Sajad",
             "model": "BlitzKode",
-            "version": "1.4"
+            "version": "1.5"
         })
     except Exception as e:
         error_msg = str(e).lower()
@@ -188,7 +188,7 @@ async def info():
     return JSONResponse({
         "name": "BlitzKode",
         "creator": "Sajad",
-        "version": "1.4",
+        "version": "1.5",
         "status": "ready",
         "optimizations": [
             "35 GPU layers",
