@@ -579,7 +579,7 @@
                 <div class="user-info">
                     <div class="user-avatar">S</div>
                     <span class="user-name">Created by Sajad</span>
-                    <span class="model-badge">v1.5</span>
+                    <span class="model-badge">v1.6</span>
                 </div>
             </div>
         </aside>
@@ -737,14 +737,14 @@
             try {
                 var timeoutPromise = new Promise(function(_, reject) {
                     setTimeout(function() {
-                        reject(new Error('Request timeout (120s)'));
-                    }, 120000);
+                        reject(new Error('Request timeout'));
+                    }, 90000);
                 });
 
                 var fetchPromise = fetch('/generate', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({prompt: prompt, temperature: 0.4, max_tokens: 512})
+                    body: JSON.stringify({prompt: prompt, temperature: 0.5, max_tokens: 256})
                 });
 
                 var res = await Promise.race([fetchPromise, timeoutPromise]);
