@@ -9,6 +9,8 @@ An AI-powered coding assistant built by **Sajad** using fine-tuned LLM technolog
 - **Fast Inference** - Optimized llama.cpp backend for rapid responses
 - **Modern UI** - Clean, professional interface inspired by ChatGPT
 - **Dark Theme** - Easy on the eyes for long coding sessions
+- **Mobile Responsive** - Works on desktop and mobile devices
+- **Streaming Support** - Real-time token streaming via API
 
 ## Tech Stack
 
@@ -22,9 +24,6 @@ An AI-powered coding assistant built by **Sajad** using fine-tuned LLM technolog
 ### Run the Server
 
 ```bash
-# Activate conda environment
-conda activate your_env
-
 # Start the server
 python server.py
 ```
@@ -38,7 +37,22 @@ Open **http://localhost:7860** in your browser.
 curl -X POST http://localhost:7860/generate \
   -H "Content-Type: application/json" \
   -d '{"prompt": "Write hello world in python", "max_tokens": 200}'
+
+# Stream response
+curl -X POST http://localhost:7860/generate/stream \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "Write hello world in python"}'
 ```
+
+## API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/` | GET | Web UI |
+| `/generate` | POST | Generate response |
+| `/generate/stream` | POST | Stream response |
+| `/health` | GET | Health check |
+| `/info` | GET | API info |
 
 ## Project Structure
 
@@ -55,20 +69,6 @@ BlitzKode/
 └── checkpoints/         # Trained model checkpoints
 ```
 
-## Training
-
-To train with custom data:
-
-```bash
-python scripts/train_max.py
-```
-
-## Export to GGUF
-
-```bash
-python scripts/export_gguf.py
-```
-
 ## System Prompt
 
 BlitzKode is configured with the following traits:
@@ -76,6 +76,19 @@ BlitzKode is configured with the following traits:
 - Clean, efficient code with comments
 - Concise explanations
 - Practical solutions
+- Created by Sajad
+
+## Performance Optimizations
+
+- 35 GPU layers
+- 4096 context window
+- Flash Attention
+- Memory locking
+- GZip compression
+
+## Version
+
+Current version: **1.3**
 
 ## Creator
 

@@ -13,7 +13,8 @@ import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
-import json
+from fastapi.middleware.gzip import GZipMiddleware
+from pydantic import BaseModel
 
 # Paths
 BLITZKODE_DIR = Path("C:/Dev/Projects/BlitzKode")
@@ -42,15 +43,26 @@ llm = llama_cpp.Llama(
     use_mmap=True,
     use_mlock=True,
     flash_attn=True,
-    tensor_split=[0.0],
     seed=-1,
 )
 load_time = time.time() - start_time
 print(f"Model loaded in {load_time:.2f}s\n")
 
-# FastAPI app
-app = FastAPI(title="BlitzKode API", version="1.2")
+# FastAPI app with config
+app = FastAPI(title="BlitzKode API", version="1.3")
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+# Request validation
+class GenerateRequest(BaseModel):
+    prompt: str
+    temperature: float = 0.3
+    max_tokens: int = 2048
+    top_p: float = 0.9
+    top_k: int = 40
+    repeat_penalty: float = 1.1
+
+MAX_PROMPT_LENGTH = 8000
 
 # Optimized system prompt - Creator attribution
 SYSTEM_PROMPT = """<|im_start|>system
@@ -72,79 +84,89 @@ Guidelines:
 async def root():
     return FileResponse(str(FRONTEND_PATH))
 
+@app.get("/favicon.ico")
+async def favicon():
+    return JSONResponse({"status": "not_found"}, status_code=404)
+
 @app.get("/health")
 async def health():
     return JSONResponse({
         "status": "healthy",
         "model_loaded": True,
-        "version": "1.2"
+        "version": "1.3"
     })
 
 @app.post("/generate")
-async def generate(request: Request):
-    data = await request.json()
-    prompt = data.get("prompt", "")
-    temperature = data.get("temperature", 0.3)
-    max_tokens = data.get("max_tokens", 2048)
-    top_p = data.get("top_p", 0.9)
-    top_k = data.get("top_k", 40)
-    repeat_penalty = data.get("repeat_penalty", 1.1)
-    
-    if not prompt:
+async def generate(req: GenerateRequest, request: Request):
+    # Validate prompt length
+    if not req.prompt or not req.prompt.strip():
         return JSONResponse({"error": "Prompt is required"}, status_code=400)
     
-    full_prompt = f"{SYSTEM_PROMPT}\n<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n"
+    if len(req.prompt) > MAX_PROMPT_LENGTH:
+        return JSONResponse(
+            {"error": f"Prompt too long. Max {MAX_PROMPT_LENGTH} characters."},
+            status_code=400
+        )
     
-    result = llm(
-        full_prompt,
-        max_tokens=max_tokens,
-        temperature=temperature,
-        top_p=top_p,
-        top_k=top_k,
-        repeat_penalty=repeat_penalty,
-        frequency_penalty=0.0,
-        presence_penalty=0.0,
-        stop=["<|im_end|>", "<|im_start|>user"],
-    )
+    full_prompt = f"{SYSTEM_PROMPT}\n<|im_start|>user\n{req.prompt}<|im_end|>\n<|im_start|>assistant\n"
     
-    response = result["choices"][0]["text"].strip()
-    return JSONResponse({
-        "response": response,
-        "creator": "Sajad",
-        "model": "BlitzKode",
-        "version": "1.2"
-    })
-
-@app.post("/generate/stream")
-async def generate_stream(request: Request):
-    data = await request.json()
-    prompt = data.get("prompt", "")
-    temperature = data.get("temperature", 0.3)
-    max_tokens = data.get("max_tokens", 2048)
-    
-    if not prompt:
-        return JSONResponse({"error": "Prompt is required"}, status_code=400)
-    
-    full_prompt = f"{SYSTEM_PROMPT}\n<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n"
-    
-    def generate_tokens():
-        for token in llm(
+    try:
+        result = llm(
             full_prompt,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            top_p=0.9,
-            top_k=40,
-            repeat_penalty=1.1,
+            max_tokens=req.max_tokens,
+            temperature=req.temperature,
+            top_p=req.top_p,
+            top_k=req.top_k,
+            repeat_penalty=req.repeat_penalty,
             frequency_penalty=0.0,
             presence_penalty=0.0,
             stop=["<|im_end|>", "<|im_start|>user"],
-            stream=True,
-        ):
-            if token.get("choices"):
-                text = token["choices"][0].get("text", "")
-                if text:
-                    yield f"data: {json.dumps({'token': text})}\n\n"
-        yield f"data: {json.dumps({'done': True})}\n\n"
+        )
+        
+        response = result["choices"][0]["text"].strip()
+        return JSONResponse({
+            "response": response,
+            "creator": "Sajad",
+            "model": "BlitzKode",
+            "version": "1.3"
+        })
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.post("/generate/stream")
+async def generate_stream(req: GenerateRequest):
+    if not req.prompt or not req.prompt.strip():
+        return JSONResponse({"error": "Prompt is required"}, status_code=400)
+    
+    if len(req.prompt) > MAX_PROMPT_LENGTH:
+        return JSONResponse(
+            {"error": f"Prompt too long. Max {MAX_PROMPT_LENGTH} characters."},
+            status_code=400
+        )
+    
+    full_prompt = f"{SYSTEM_PROMPT}\n<|im_start|>user\n{req.prompt}<|im_end|>\n<|im_start|>assistant\n"
+    
+    def generate_tokens():
+        try:
+            for token in llm(
+                full_prompt,
+                max_tokens=req.max_tokens,
+                temperature=req.temperature,
+                top_p=req.top_p,
+                top_k=req.top_k,
+                repeat_penalty=req.repeat_penalty,
+                frequency_penalty=0.0,
+                presence_penalty=0.0,
+                stop=["<|im_end|>", "<|im_start|>user"],
+                stream=True,
+            ):
+                if token.get("choices"):
+                    text = token["choices"][0].get("text", "")
+                    if text:
+                        yield f"data: {{\"token\": {repr(text)}}}\n\n"
+            yield "data: {\"done\": true}\n\n"
+        except Exception as e:
+            yield f"data: {{\"error\": {repr(str(e))}}}\n\n"
     
     return StreamingResponse(
         generate_tokens(),
@@ -160,7 +182,7 @@ async def info():
     return JSONResponse({
         "name": "BlitzKode",
         "creator": "Sajad",
-        "version": "1.2",
+        "version": "1.3",
         "status": "ready",
         "optimizations": [
             "35 GPU layers",
@@ -168,7 +190,7 @@ async def info():
             "Flash Attention",
             "Memory locked",
             "Streaming support",
-            "Health endpoint"
+            "GZip compression"
         ],
         "endpoints": {
             "generate": "POST /generate",
