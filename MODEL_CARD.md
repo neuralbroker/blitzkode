@@ -9,6 +9,8 @@ tags:
 - gguf
 - llama.cpp
 - qwen2.5
+- python
+- javascript
 base_model:
 - Qwen/Qwen2.5-1.5B-Instruct
 ---
@@ -28,13 +30,13 @@ This model card is written conservatively and reflects what can be supported by 
 | Property | Value |
 | --- | --- |
 | Model name | BlitzKode |
+| Version | 1.6 (CPU optimized) |
 | Base model family | `Qwen/Qwen2.5-1.5B-Instruct` |
-| Model format | GGUF for inference, plus LoRA checkpoints in the repo |
+| Model format | GGUF (F16, ~3GB) |
 | Primary runtime | `llama.cpp` / `llama-cpp-python` |
-| Served artifact in this repo | `blitzkode.gguf` |
-| Artifact size | 3,093,668,800 bytes, approximately 3.09 GB (2.88 GiB) |
-| Default server context | 2048 tokens in `server.py` |
-| Intended language | Primarily English prompts with code outputs |
+| Served artifact | `blitzkode.gguf` |
+| Default context | 2048 tokens |
+| Intended language | English (code generation) |
 
 ## Important Provenance Note
 
@@ -242,18 +244,13 @@ You are BlitzKode, an AI coding assistant created by Sajad. You are an expert in
 <|im_start|>assistant
 ```
 
-## Licensing Note
+## License
 
-The repository README historically describes the project as MIT-licensed, but this snapshot does not include a standalone top-level `LICENSE` file. In practice, any redistribution or downstream use should also comply with the license and use conditions of the upstream Qwen base model.
+BlitzKode is licensed under **MIT License**. See the project README for details.
 
-If this model is being published as a formal release, it is strongly recommended to add explicit license metadata at the repository and model-hosting levels.
+When using this model, also comply with the upstream Qwen base model license.
 
-## Recommended Next Release Improvements
+## Contact
 
-To make BlitzKode easier to trust and reuse as a public model release, the most valuable next steps would be:
-
-- publish a manifest that maps `blitzkode.gguf` to one exact training checkpoint
-- pin the exact dataset sources and versions used for the released artifact
-- include a small benchmark and human-eval summary
-- add explicit license metadata
-- document the training environment and hyperparameters in one place
+- GitHub: https://github.com/sajadkoder/blitzkode
+- Issues and contributions welcome!
