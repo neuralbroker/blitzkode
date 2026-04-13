@@ -18,11 +18,7 @@ base_model:
 
 # BlitzKode
 
-<p align="center">
-  <img src="Screenshot 2026-03-26 122611.png" alt="BlitzKode UI" width="800"/>
-</p>
-
-**BlitzKode** is a locally fine-tuned AI coding assistant built by **Sajad** using the Qwen2.5-1.5B base model. It's packaged as a GGUF format model for fast local inference with llama.cpp.
+**BlitzKode** is a fine-tuned AI coding assistant built by **Sajad** using the Qwen2.5-1.5B base model. It's packaged as a GGUF format model for fast local inference with llama.cpp.
 
 > Created by [Abdulla Sajad](https://github.com/sajadkoder)  
 > Project: [sajadkoder/blitzkode](https://github.com/sajadkoder/blitzkode)
@@ -60,26 +56,16 @@ base_model:
 BlitzKode was fine-tuned through a 4-stage pipeline:
 
 ### 1. SFT (Supervised Fine-Tuning)
-- **Script**: `scripts/train_sft.py`
-- Applies LoRA fine-tuning to coding-style prompts and responses
-- Uses PEFT library for efficient parameter-efficient training
+Applies LoRA fine-tuning to coding-style prompts and responses using PEFT library.
 
 ### 2. GRPO (Group Relative Policy Optimization)
-- **Script**: `scripts/train_grpo.py`
-- Uses heuristic reward functions:
-  - `correctness_reward` - Code correctness
-  - `format_reward` - Proper code formatting
-  - `reasoning_reward` - Logic and reasoning
+Uses heuristic reward functions for code correctness, formatting, and reasoning.
 
 ### 3. DPO (Direct Preference Optimization)
-- **Script**: `scripts/train_dpo.py`
-- Trains on handcrafted chosen/rejected preference pairs
-- Improves clarity and answer quality
+Trains on handcrafted preference pairs to improve clarity and answer quality.
 
 ### 4. Merge & Export
-- **Script**: `scripts/export_gguf.py`
-- Merges LoRA adapters into base model
-- Converts to GGUF format for fast inference
+Merges LoRA adapters into base model and converts to GGUF format.
 
 ### Training Frameworks
 - HuggingFace Transformers
@@ -91,38 +77,24 @@ BlitzKode was fine-tuned through a 4-stage pipeline:
 
 ## Training Data
 
-### Local Datasets
-- `datasets/raw/blitzkode_sft_v1.json` - Seed samples
-- `datasets/raw/blitzkode_sft_full.json` - Extended coding samples
-
-### Data Categories
-- Arrays and hash maps
-- Linked lists
-- Trees and graph traversal
-- Dynamic programming
-- Sorting and searching
-- Stack and queue implementations
-- Interview-style coding problems
+Custom curated coding datasets covering:
+- Algorithm implementation
+- Data structures
 - Code explanations
-
-### Optional External Sources
-The project can optionally incorporate:
-- CodeAlpaca-20k
-- GSM8K
-- MetaMathQA
-- MathInstruct
+- Programming concepts
+- Bug fixing scenarios
 
 ---
 
 ## Features
 
-- **Multi-language Code Generation** - Python, JavaScript, Java, C++, TypeScript, HTML/CSS, SQL
+- **Multi-language Code Generation** - Python, JavaScript, Java, C++, TypeScript, SQL
 - **Code Explanation** - Clear comments and documentation
 - **Bug Fixing** - Debug and fix code issues
-- **Algorithm Help** - Data structures and algorithms
+- **Algorithm Assistance** - Data structures and algorithms
 - **Offline Operation** - Runs locally without internet
 - **Fast Inference** - Optimized CPU inference
-- **Modern UI** - ChatGPT-style dark interface
+- **Modern UI** - Professional dark interface
 
 ---
 
@@ -133,15 +105,13 @@ The project can optionally incorporate:
 - Algorithm and data structure help
 - Code generation and explanation
 - Educational programming support
-- Lightweight code review
-- Bug detection and fixing
+- Code review and debugging
 
 ### Out of Scope
 - Production code without expert review
 - Security-critical applications
 - Multi-modal tasks (images not supported)
 - Long-context repository analysis
-- Real-time high-assurance systems
 
 ---
 
@@ -177,11 +147,6 @@ python server.py
 curl -X POST http://localhost:7860/generate \
   -H "Content-Type: application/json" \
   -d '{"prompt": "Write hello world in python"}'
-
-# Stream response
-curl -X POST http://localhost:7860/generate/stream \
-  -H "Content-Type: application/json" \
-  -d '{"prompt": "Write a Python function"}'
 ```
 
 ### Python Usage
@@ -243,10 +208,8 @@ The server supports environment variables:
 
 - **Text-only input** - No image/vision support
 - **2048 token context** - CPU-friendly but limited
-- **Small model** - May produce incorrect code occasionally
-- **No formal benchmarks** - Not evaluated on standard datasets
-- **Quantization loss** - F16 quantization may reduce accuracy
 - **Verify outputs** - Always review generated code before use
+- **Small model** - May occasionally produce incorrect code
 
 ---
 
