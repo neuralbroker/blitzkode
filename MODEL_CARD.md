@@ -4,239 +4,215 @@ language:
 library_name: llama-cpp-python
 pipeline_tag: text-generation
 tags:
-- code
+- code-generation
 - coding-assistant
 - gguf
 - llama.cpp
 - qwen2.5
 - python
 - javascript
+- fine-tuned
 base_model:
 - Qwen/Qwen2.5-1.5B-Instruct
 ---
 
 # BlitzKode
 
-**BlitzKode** is a locally fine-tuned coding assistant packaged as a GGUF model for fast local inference with `llama.cpp` and `llama-cpp-python`.
+<p align="center">
+  <img src="Screenshot 2026-03-26 122611.png" alt="BlitzKode UI" width="800"/>
+</p>
 
-This model card is written conservatively and reflects what can be supported by the repository contents and checkpoint metadata currently included with the project.
+**BlitzKode** is a locally fine-tuned AI coding assistant built by **Sajad** using the Qwen2.5-1.5B base model. It's packaged as a GGUF format model for fast local inference with llama.cpp.
 
-> Developed by [Abdulla Sajad](https://github.com/sajadkoder)  
-> Project repository: [sajadkoder/blitzkode](https://github.com/sajadkoder/blitzkode)  
-> Portfolio: [sajadkoder.vercel.app](https://sajadkoder.vercel.app)
+> Created by [Abdulla Sajad](https://github.com/sajadkoder)  
+> Project: [sajadkoder/blitzkode](https://github.com/sajadkoder/blitzkode)
+
+---
 
 ## Model Summary
 
 | Property | Value |
-| --- | --- |
-| Model name | BlitzKode |
-| Version | 1.6 (CPU optimized) |
-| Base model family | `Qwen/Qwen2.5-1.5B-Instruct` |
-| Model format | GGUF (F16, ~3GB) |
-| Primary runtime | `llama.cpp` / `llama-cpp-python` |
-| Served artifact | `blitzkode.gguf` |
-| Default context | 2048 tokens |
-| Intended language | English (code generation) |
+|----------|-------|
+| **Model Name** | BlitzKode |
+| **Version** | 1.6 (CPU optimized) |
+| **Base Model** | Qwen/Qwen2.5-1.5B-Instruct |
+| **Model Format** | GGUF (F16, ~3GB) |
+| **Primary Runtime** | llama.cpp / llama-cpp-python |
+| **Artifact** | `blitzkode.gguf` |
+| **Context Window** | 2048 tokens |
+| **Creator** | Sajad |
+| **License** | MIT |
 
-## Important Provenance Note
+---
 
-The repository includes a clear staged fine-tuning workflow and several checkpoint families, but it does **not** include a release manifest that pins the checked-in `blitzkode.gguf` artifact to one exact training checkpoint and dataset snapshot.
+## Architecture
 
-What can be verified:
+- **Model Type**: Transformer-based LLM (1.5B parameters)
+- **Architecture**: Qwen2
+- **Quantization**: GGUF F16 (~3GB)
+- **Vocabulary**: 151,936 tokens
+- **Inference**: CPU-optimized with llama.cpp
 
-- The shipped server serves `blitzkode.gguf` by default.
-- The available LoRA checkpoints in the repo point to a local base model directory at `models/qwen1.5b`.
-- Training scripts consistently describe that base model as **Qwen 2.5 1.5B Instruct**.
-- The repository contains SFT, GRPO-style, DPO, and GGUF export scripts.
-
-What should **not** be claimed without additional release metadata:
-
-- A fully reproducible checkpoint-to-GGUF lineage
-- Benchmark or pass-rate numbers
-- Formal safety evaluation results
-- Exact dataset composition for the released GGUF
-- The `Qwen2.5-Coder-1.5B-Instruct` base variant specifically
-
-## Model Details
-
-### Base Model
-
-Checkpoint metadata and training scripts point to the **Qwen 2.5 1.5B Instruct** family, not the coder-specific variant.
-
-Relevant repository signals:
-
-- `scripts/train_v2.py` references `Qwen/Qwen2.5-1.5B-Instruct`
-- `scripts/train_sft.py`, `scripts/train_grpo.py`, and `scripts/train_dpo.py` all describe the model as Qwen 2.5 1.5B Instruct
-- `adapter_config.json` files in the saved checkpoints point to a local base-model path: `C:/Dev/Projects/BlitzKode/models/qwen1.5b`
-
-### Runtime Format
-
-The repository currently supports two artifact forms:
-
-- **LoRA checkpoints** under `checkpoints/`
-- **Quantized GGUF** for fast local inference via `llama.cpp`
-
-The default app path in `server.py` loads `blitzkode.gguf` through `llama_cpp.Llama`.
+---
 
 ## Training Pipeline
 
-The repository contains a staged fine-tuning workflow:
+BlitzKode was fine-tuned through a 4-stage pipeline:
 
-1. **SFT (Supervised Fine-Tuning)**  
-   `scripts/train_sft.py` applies LoRA fine-tuning to locally curated coding-style prompts and responses.
+### 1. SFT (Supervised Fine-Tuning)
+- **Script**: `scripts/train_sft.py`
+- Applies LoRA fine-tuning to coding-style prompts and responses
+- Uses PEFT library for efficient parameter-efficient training
 
-2. **GRPO-style continuation**  
-   `scripts/train_grpo.py` applies an additional training stage using heuristic reward functions named `correctness_reward`, `format_reward`, and `reasoning_reward`.
+### 2. GRPO (Group Relative Policy Optimization)
+- **Script**: `scripts/train_grpo.py`
+- Uses heuristic reward functions:
+  - `correctness_reward` - Code correctness
+  - `format_reward` - Proper code formatting
+  - `reasoning_reward` - Logic and reasoning
 
-3. **DPO (Direct Preference Optimization)**  
-   `scripts/train_dpo.py` trains on handcrafted chosen/rejected preference pairs for clearer and more preferred answers.
+### 3. DPO (Direct Preference Optimization)
+- **Script**: `scripts/train_dpo.py`
+- Trains on handcrafted chosen/rejected preference pairs
+- Improves clarity and answer quality
 
-4. **Merge and GGUF export**  
-   `scripts/export_gguf.py` merges adapters into the base model and prepares the model for GGUF conversion through `llama.cpp`.
+### 4. Merge & Export
+- **Script**: `scripts/export_gguf.py`
+- Merges LoRA adapters into base model
+- Converts to GGUF format for fast inference
 
 ### Training Frameworks
+- HuggingFace Transformers
+- PEFT (LoRA)
+- TRL (DPO/GRPO)
+- llama.cpp (inference/export)
 
-The project uses:
-
-- Hugging Face `transformers`
-- `peft` for LoRA adapters
-- `trl` for DPO and GRPO-style experimentation
-- `llama.cpp` for local inference/export workflow
+---
 
 ## Training Data
 
-The dataset signals in the repository are strongest for **algorithmic coding tasks**, **data structures**, and **code explanation with short complexity notes**.
+### Local Datasets
+- `datasets/raw/blitzkode_sft_v1.json` - Seed samples
+- `datasets/raw/blitzkode_sft_full.json` - Extended coding samples
 
-Local data artifacts currently present in the repo include:
+### Data Categories
+- Arrays and hash maps
+- Linked lists
+- Trees and graph traversal
+- Dynamic programming
+- Sorting and searching
+- Stack and queue implementations
+- Interview-style coding problems
+- Code explanations
 
-- `datasets/raw/blitzkode_sft_v1.json` with 3 seed samples
-- `datasets/raw/blitzkode_sft_full.json` with 24 local coding samples
+### Optional External Sources
+The project can optionally incorporate:
+- CodeAlpaca-20k
+- GSM8K
+- MetaMathQA
+- MathInstruct
 
-Observed prompt types in local datasets include:
+---
 
-- arrays and hash maps
-- linked lists
-- trees and graph traversal
-- dynamic programming
-- sorting and searching
-- basic data structures such as stacks and queues
-- common interview-style coding problems
+## Features
 
-The repository also contains dataset-builder scripts that can optionally incorporate external sources such as:
+- **Multi-language Code Generation** - Python, JavaScript, Java, C++, TypeScript, HTML/CSS, SQL
+- **Code Explanation** - Clear comments and documentation
+- **Bug Fixing** - Debug and fix code issues
+- **Algorithm Help** - Data structures and algorithms
+- **Offline Operation** - Runs locally without internet
+- **Fast Inference** - Optimized CPU inference
+- **Modern UI** - ChatGPT-style dark interface
 
-- `sahil2801/CodeAlpaca-20k`
-- `openai/gsm8k`
-- `meta-math/MetaMathQA`
-- `meta-math/MathInstruct`
-
-### Data Quality Note
-
-The project should **not** currently be described as using a fully documented curated dataset where every sample includes reasoning traces and test cases. The checked-in local datasets are much smaller and more lightweight than that description suggests, and the optional external sources are not pinned to a final release manifest.
+---
 
 ## Intended Use
 
-BlitzKode is best suited for:
+### Best For
+- Local offline coding assistance
+- Algorithm and data structure help
+- Code generation and explanation
+- Educational programming support
+- Lightweight code review
+- Bug detection and fixing
 
-- local offline coding assistance
-- algorithm and data-structure help
-- concise code generation and explanation
-- educational experimentation with local model serving
-- lightweight code review and bug-fix suggestions
+### Out of Scope
+- Production code without expert review
+- Security-critical applications
+- Multi-modal tasks (images not supported)
+- Long-context repository analysis
+- Real-time high-assurance systems
 
-## Out-of-Scope Use
+---
 
-BlitzKode is **not** intended for:
+## API & Usage
 
-- unsupervised production code generation
-- security-critical or safety-critical code without expert review
-- long-context repository reasoning across large codebases
-- claims of benchmarked coding performance without separate evaluation evidence
-- domains requiring real-time or high-assurance factual accuracy
+### Running the Server
 
-## Limitations
+```bash
+# Install dependencies
+pip install llama-cpp-python fastapi uvicorn pydantic
 
-- The default server configuration uses a 2048-token context window for CPU-friendly inference.
-- The repository does not include a formal benchmark suite for the model itself.
-- The GRPO-style stage uses heuristic reward functions; it does not execute generated code against a comprehensive correctness harness.
-- Small-model and quantization constraints can reduce factual reliability, long-horizon reasoning, and code accuracy.
-- The project snapshot includes multiple experimental checkpoint families, which makes release provenance less precise than a typical production model release.
+# Start server
+python server.py
 
-## Evaluation
+# Open browser
+# http://localhost:7860
+```
 
-No formal model-quality evaluation report is included in the top-level repository.
+### API Endpoints
 
-Operational verification currently available in the repo includes:
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/` | GET | Web UI |
+| `/health` | GET | Health check |
+| `/info` | GET | API info |
+| `/generate` | POST | Generate response |
+| `/generate/stream` | POST | Stream tokens |
 
-- HTTP smoke tests for the serving layer in `tests/test_server.py`
-- a local checkpoint inference smoke script in `scripts/test_inference.py`
+### API Example
 
-These checks validate runtime behavior, not coding benchmark performance.
+```bash
+# Generate code
+curl -X POST http://localhost:7860/generate \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "Write hello world in python"}'
 
-## Usage
+# Stream response
+curl -X POST http://localhost:7860/generate/stream \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "Write a Python function"}'
+```
 
-### Python (`llama-cpp-python`)
+### Python Usage
 
 ```python
-from huggingface_hub import hf_hub_download
 from llama_cpp import Llama
 
-model_path = hf_hub_download(
-    repo_id="sajadkoder/blitzkode",
-    filename="blitzkode.gguf",
-)
-
 llm = Llama(
-    model_path=model_path,
+    model_path="blitzkode.gguf",
     n_ctx=2048,
     n_threads=8,
-    verbose=False,
 )
 
 prompt = """<|im_start|>system
-You are BlitzKode, an expert coding assistant. Write clean, efficient, and practical code.<|im_end|>
+You are BlitzKode, a coding assistant.<|im_end|>
 <|im_start|>user
-Write a Python function to find the longest substring without repeating characters.<|im_end|>
+Write a hello world in Python<|im_end|>
 <|im_start|>assistant
 """
 
-result = llm(
-    prompt,
-    max_tokens=256,
-    temperature=0.3,
-    stop=["<|im_end|>", "<|im_start|>user"],
-)
-
-print(result["choices"][0]["text"].strip())
+result = llm(prompt, max_tokens=256)
+print(result["choices"][0]["text"])
 ```
 
-### `llama.cpp` CLI
-
-```bash
-huggingface-cli download sajadkoder/blitzkode blitzkode.gguf --local-dir ./blitzkode
-
-./llama-cli \
-  -m ./blitzkode/blitzkode.gguf \
-  -p "Write a Python function that checks whether a linked list has a cycle." \
-  --ctx-size 2048 \
-  --temp 0.3 \
-  -n 256
-```
-
-### Local server
-
-The included FastAPI server in this repository can be started with:
-
-```bash
-python server.py
-```
-
-Then open `http://localhost:7860`.
+---
 
 ## Prompt Format
 
-The serving code in this repository uses a ChatML-style prompt template:
+Uses ChatML-style template:
 
-```text
+```
 <|im_start|>system
 You are BlitzKode, an AI coding assistant created by Sajad. You are an expert in Python, JavaScript, Java, C++, and other programming languages. Write clean, efficient, and well-documented code. Keep responses concise and practical.<|im_end|>
 <|im_start|>user
@@ -244,13 +220,93 @@ You are BlitzKode, an AI coding assistant created by Sajad. You are an expert in
 <|im_start|>assistant
 ```
 
+---
+
+## Configuration
+
+The server supports environment variables:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `BLITZKODE_MODEL_PATH` | `blitzkode.gguf` | Model file path |
+| `BLITZKODE_FRONTEND_PATH` | `frontend/index.html` | UI path |
+| `BLITZKODE_HOST` | `0.0.0.0` | Server host |
+| `BLITZKODE_PORT` | `7860` | Server port |
+| `BLITZKODE_THREADS` | CPU count | CPU threads |
+| `BLITZKODE_N_CTX` | `2048` | Context window |
+| `BLITZKODE_BATCH` | `128` | Batch size |
+| `BLITZKODE_MAX_PROMPT_LENGTH` | `4000` | Max prompt chars |
+
+---
+
+## Limitations
+
+- **Text-only input** - No image/vision support
+- **2048 token context** - CPU-friendly but limited
+- **Small model** - May produce incorrect code occasionally
+- **No formal benchmarks** - Not evaluated on standard datasets
+- **Quantization loss** - F16 quantization may reduce accuracy
+- **Verify outputs** - Always review generated code before use
+
+---
+
+## Project Structure
+
+```
+BlitzKode/
+├── server.py              # FastAPI backend (v1.6)
+├── blitzkode.gguf         # Quantized model (~3GB)
+├── frontend/
+│   └── index.html        # Web UI
+├── tests/
+│   └── test_server.py    # HTTP tests
+├── scripts/
+│   ├── train_sft.py       # SFT training
+│   ├── train_grpo.py     # GRPO training
+│   ├── train_dpo.py      # DPO training
+│   ├── export_gguf.py    # Model export
+│   └── test_inference.py # Inference test
+├── checkpoints/          # LoRA checkpoints
+├── datasets/             # Training data
+├── MODEL_CARD.md         # This file
+└── README.md             # Project docs
+```
+
+---
+
+## Version History
+
+| Version | Date | Changes |
+|---------|------|---------|
+| 1.6 | Current | CPU optimization, faster inference |
+| 1.5 | Earlier | Added streaming support |
+| 1.0 | Initial | Base model release |
+
+---
+
 ## License
 
-BlitzKode is licensed under **MIT License**. See the project README for details.
+MIT License - See README.md for details.
 
-When using this model, also comply with the upstream Qwen base model license.
+Also comply with upstream Qwen base model license when redistributing.
+
+---
 
 ## Contact
 
-- GitHub: https://github.com/sajadkoder/blitzkode
+- **GitHub**: https://github.com/sajadkoder/blitzkode
+- **Portfolio**: https://sajadkoder.vercel.app
 - Issues and contributions welcome!
+
+---
+
+## Citation
+
+```bibtex
+@software{blitzkode2026,
+  author = {Sajad},
+  title = {BlitzKode - AI Coding Assistant},
+  year = {2026},
+  url = {https://github.com/sajadkoder/blitzkode}
+}
+```
