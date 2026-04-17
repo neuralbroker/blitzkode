@@ -48,7 +48,7 @@ class ServerTestCase(unittest.IsolatedAsyncioTestCase):
         self.frontend_path.write_text("<html><body>BlitzKode</body></html>", encoding="utf-8")
         self.model_path = self.root / "blitzkode.gguf"
 
-    async def make_client(self, with_model=True):
+    async def make_client(self, with_model=True, api_key=""):
         if with_model:
             self.model_path.write_text("fake-model", encoding="utf-8")
         elif self.model_path.exists():
@@ -59,6 +59,7 @@ class ServerTestCase(unittest.IsolatedAsyncioTestCase):
             model_path=self.model_path,
             frontend_path=self.frontend_path,
             preload_model=False,
+            api_key=api_key,
         )
 
         patcher = patch.object(server.llama_cpp, "Llama", FakeLlama)
@@ -89,6 +90,24 @@ class ServerTestCase(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(payload["model_exists"])
         self.assertTrue(payload["frontend_exists"])
 
+    async def test_health_degraded_when_model_missing(self):
+        client = await self.make_client(with_model=False)
+        response = await client.get("/health")
+        payload = response.json()
+
+        self.assertEqual(payload["status"], "degraded")
+        self.assertFalse(payload["model_exists"])
+
+    async def test_info_endpoint(self):
+        client = await self.make_client()
+        response = await client.get("/info")
+        payload = response.json()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payload["name"], "BlitzKode")
+        self.assertEqual(payload["version"], "2.0")
+        self.assertIn("endpoints", payload)
+
     async def test_generate_uses_stubbed_model(self):
         client = await self.make_client()
         response = await client.post(
@@ -102,12 +121,39 @@ class ServerTestCase(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(FakeLlama.init_calls), 1)
         self.assertIn("<|im_start|>user\nwrite a loop", FakeLlama.call_history[0]["prompt"])
 
+    async def test_generate_with_conversation_history(self):
+        client = await self.make_client()
+        response = await client.post(
+            "/generate",
+            json={
+                "prompt": "fix the bug",
+                "messages": [
+                    {"role": "user", "content": "write a loop"},
+                    {"role": "assistant", "content": "for i in range(10): ..."},
+                ],
+            },
+        )
+        payload = response.json()
+
+        self.assertEqual(response.status_code, 200)
+        prompt_used = FakeLlama.call_history[0]["prompt"]
+        self.assertIn("<|im_start|>user\nwrite a loop", prompt_used)
+        self.assertIn("<|im_start|>assistant\nfor i in range(10): ...", prompt_used)
+
     async def test_generate_rejects_blank_prompts(self):
         client = await self.make_client()
         response = await client.post("/generate", json={"prompt": "   "})
 
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()["error"], "Prompt is required")
+
+    async def test_generate_rejects_long_prompts(self):
+        client = await self.make_client()
+        long_prompt = "x" * 5000
+        response = await client.post("/generate", json={"prompt": long_prompt})
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("too long", response.json()["error"])
 
     async def test_generate_returns_503_when_model_is_missing(self):
         client = await self.make_client(with_model=False)
@@ -125,6 +171,50 @@ class ServerTestCase(unittest.IsolatedAsyncioTestCase):
         self.assertIn('data: {"token": "Hello"}', response.text)
         self.assertIn('data: {"token": " world"}', response.text)
         self.assertIn("data: [DONE]", response.text)
+
+    async def test_stream_503_when_model_missing(self):
+        client = await self.make_client(with_model=False)
+        response = await client.post("/generate/stream", json={"prompt": "hello"})
+
+        self.assertEqual(response.status_code, 503)
+
+    async def test_api_key_rejects_invalid(self):
+        client = await self.make_client(api_key="secret123")
+        response = await client.post(
+            "/generate",
+            json={"prompt": "hello"},
+            headers={"Authorization": "Bearer wrong"},
+        )
+
+        self.assertEqual(response.status_code, 401)
+
+    async def test_api_key_accepts_valid(self):
+        client = await self.make_client(api_key="secret123")
+        response = await client.post(
+            "/generate",
+            json={"prompt": "hello"},
+            headers={"Authorization": "Bearer secret123"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+    async def test_no_api_key_required_when_not_set(self):
+        client = await self.make_client(api_key="")
+        response = await client.post("/generate", json={"prompt": "hello"})
+
+        self.assertEqual(response.status_code, 200)
+
+    async def test_cors_headers_present(self):
+        client = await self.make_client()
+        response = await client.options(
+            "/generate",
+            headers={
+                "Origin": "http://example.com",
+                "Access-Control-Request-Method": "POST",
+            },
+        )
+
+        self.assertIn("access-control-allow-origin", response.headers)
 
 
 if __name__ == "__main__":

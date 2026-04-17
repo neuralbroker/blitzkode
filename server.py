@@ -2,15 +2,16 @@
 """
 BlitzKode backend server.
 
-The API serves the bundled frontend and proxies prompts to a local GGUF model
-through llama.cpp. The model is loaded lazily so the module stays importable in
-tests and in environments where the model artifact is not present yet.
+Serves the bundled frontend and proxies prompts to a local GGUF model
+through llama.cpp. Model is loaded lazily so the module stays importable
+in tests and environments where the model artifact is not present yet.
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -22,13 +23,13 @@ from typing import Iterator
 
 import llama_cpp
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 APP_NAME = "BlitzKode"
-APP_VERSION = "1.6"
+APP_VERSION = "2.0"
 CREATOR = "Sajad"
 ROOT_DIR = Path(__file__).resolve().parent
 DEFAULT_MODEL_PATH = ROOT_DIR / "blitzkode.gguf"
@@ -39,6 +40,8 @@ DEFAULT_MAX_TOKENS = 512
 
 SYSTEM_PROMPT = """<|im_start|>system
 You are BlitzKode, an AI coding assistant created by Sajad. You are an expert in Python, JavaScript, Java, C++, and other programming languages. Write clean, efficient, and well-documented code. Keep responses concise and practical.<|im_end|>"""
+
+logger = logging.getLogger("blitzkode")
 
 
 def _bool_from_env(name: str, default: bool = False) -> bool:
@@ -65,6 +68,7 @@ class Settings:
     frontend_path: Path = Path(os.getenv("BLITZKODE_FRONTEND_PATH", DEFAULT_FRONTEND_PATH))
     host: str = os.getenv("BLITZKODE_HOST", "0.0.0.0")
     port: int = _int_from_env("BLITZKODE_PORT", 7860)
+    n_gpu_layers: int = _int_from_env("BLITZKODE_GPU_LAYERS", 0)
     n_ctx: int = _int_from_env("BLITZKODE_N_CTX", DEFAULT_CONTEXT)
     n_threads: int = _int_from_env(
         "BLITZKODE_THREADS",
@@ -73,10 +77,19 @@ class Settings:
     n_batch: int = _int_from_env("BLITZKODE_BATCH", 128)
     max_prompt_length: int = _int_from_env("BLITZKODE_MAX_PROMPT_LENGTH", DEFAULT_MAX_PROMPT_LENGTH)
     preload_model: bool = _bool_from_env("BLITZKODE_PRELOAD_MODEL", default=False)
+    workers: int = _int_from_env("BLITZKODE_WORKERS", 2)
+    cors_origins: str = os.getenv("BLITZKODE_CORS_ORIGINS", "*")
+    api_key: str = os.getenv("BLITZKODE_API_KEY", "")
+
+
+class MessageItem(BaseModel):
+    role: str
+    content: str
 
 
 class GenerateRequest(BaseModel):
     prompt: str
+    messages: list[MessageItem] = Field(default_factory=list)
     temperature: float = Field(default=0.5, ge=0.0, le=2.0)
     max_tokens: int = Field(default=256, ge=1, le=DEFAULT_MAX_TOKENS)
     top_p: float = Field(default=0.95, gt=0.0, le=1.0)
@@ -124,7 +137,7 @@ class ModelService:
             try:
                 self._llm = llama_cpp.Llama(
                     model_path=str(self.settings.model_path),
-                    n_gpu_layers=0,
+                    n_gpu_layers=self.settings.n_gpu_layers,
                     n_ctx=self.settings.n_ctx,
                     n_threads=self.settings.n_threads,
                     n_batch=self.settings.n_batch,
@@ -135,19 +148,33 @@ class ModelService:
                 )
                 self._load_time_seconds = time.perf_counter() - start_time
                 self._last_error = None
+                logger.info("Model loaded in %.2fs (gpu_layers=%d)", self._load_time_seconds, self.settings.n_gpu_layers)
             except Exception as exc:
                 self._last_error = str(exc)
+                logger.error("Model load failed: %s", exc)
                 raise
 
         return self._llm
 
-    def build_prompt(self, prompt: str) -> str:
-        return f"{SYSTEM_PROMPT}<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n"
+    def build_prompt(self, req: GenerateRequest) -> str:
+        parts = [SYSTEM_PROMPT]
+
+        if req.messages:
+            for msg in req.messages:
+                if msg.role in ("user", "assistant"):
+                    parts.append(f"<|im_start|>{msg.role}\n{msg.content}<|im_end|>")
+
+        parts.append(f"<|im_start|>user\n{req.prompt}<|im_end|>")
+        parts.append("<|im_start|>assistant\n")
+        return "\n".join(parts)
 
     def generate_once(self, req: GenerateRequest) -> dict[str, object]:
         llm = self.load_model()
+        full_prompt = self.build_prompt(req)
+        start = time.perf_counter()
+
         result = llm(
-            self.build_prompt(req.prompt),
+            full_prompt,
             max_tokens=req.max_tokens,
             temperature=req.temperature,
             top_p=req.top_p,
@@ -157,7 +184,11 @@ class ModelService:
             presence_penalty=0.0,
             stop=["<|im_end|>", "<|im_start|>user"],
         )
+
         response = result["choices"][0]["text"].strip()
+        elapsed = time.perf_counter() - start
+        logger.info("Generated %d chars in %.2fs", len(response), elapsed)
+
         return {
             "response": response,
             "creator": CREATOR,
@@ -167,9 +198,13 @@ class ModelService:
 
     def stream_tokens(self, req: GenerateRequest) -> Iterator[str]:
         llm = self.load_model()
+        full_prompt = self.build_prompt(req)
+        start = time.perf_counter()
+        token_count = 0
+
         try:
             for token in llm(
-                self.build_prompt(req.prompt),
+                full_prompt,
                 max_tokens=req.max_tokens,
                 temperature=req.temperature,
                 top_p=req.top_p,
@@ -184,16 +219,39 @@ class ModelService:
                     continue
                 text = token["choices"][0].get("text", "")
                 if text:
+                    token_count += 1
                     yield f"data: {json.dumps({'token': text})}\n\n"
+            elapsed = time.perf_counter() - start
+            logger.info("Streamed %d tokens in %.2fs", token_count, elapsed)
             yield "data: [DONE]\n\n"
         except Exception as exc:
+            logger.error("Stream error: %s", exc)
             yield f"data: {json.dumps({'error': str(exc)})}\n\n"
+
+
+def _check_api_key(request: Request, settings: Settings) -> JSONResponse | None:
+    if not settings.api_key:
+        return None
+    auth = request.headers.get("Authorization", "")
+    if auth.startswith("Bearer "):
+        token = auth[7:]
+    else:
+        token = auth
+    if token != settings.api_key:
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    return None
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings()
     model_service = ModelService(settings)
-    executor = ThreadPoolExecutor(max_workers=1)
+    executor = ThreadPoolExecutor(max_workers=settings.workers)
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(name)s] %(message)s",
+        datefmt="%H:%M:%S",
+    )
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -201,7 +259,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             try:
                 await asyncio.to_thread(model_service.load_model)
             except Exception:
-                # Health and generation endpoints expose the error more clearly.
                 pass
 
         try:
@@ -214,9 +271,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.model_service = model_service
     app.state.executor = executor
 
+    cors_origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=cors_origins,
         allow_methods=["*"],
         allow_headers=["*"],
     )
@@ -233,20 +291,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if not settings.frontend_path.exists() or not model_service.model_exists:
             status = "degraded"
 
-        return JSONResponse(
-            {
-                "status": status,
-                "model_loaded": model_service.model_loaded,
-                "model_path": str(settings.model_path),
-                "model_exists": model_service.model_exists,
-                "frontend_exists": settings.frontend_path.exists(),
-                "version": APP_VERSION,
-                "last_error": model_service.last_error,
-            }
-        )
+        return JSONResponse({
+            "status": status,
+            "model_loaded": model_service.model_loaded,
+            "model_path": str(settings.model_path),
+            "model_exists": model_service.model_exists,
+            "frontend_exists": settings.frontend_path.exists(),
+            "version": APP_VERSION,
+            "gpu_layers": settings.n_gpu_layers,
+            "last_error": model_service.last_error,
+        })
 
     @app.post("/generate")
-    async def generate(req: GenerateRequest):
+    async def generate(req: GenerateRequest, request: Request):
+        auth_err = _check_api_key(request, settings)
+        if auth_err:
+            return auth_err
+
         prompt = req.prompt.strip()
         if not prompt:
             return JSONResponse({"error": "Prompt is required"}, status_code=400)
@@ -273,7 +334,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             return JSONResponse({"error": str(exc)}, status_code=500)
 
     @app.post("/generate/stream")
-    async def generate_stream(req: GenerateRequest):
+    async def generate_stream(req: GenerateRequest, request: Request):
+        auth_err = _check_api_key(request, settings)
+        if auth_err:
+            return auth_err
+
         prompt = req.prompt.strip()
         if not prompt:
             return JSONResponse({"error": "Prompt is required"}, status_code=400)
@@ -305,24 +370,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/info")
     async def info():
-        return JSONResponse(
-            {
-                "name": APP_NAME,
-                "creator": CREATOR,
-                "version": APP_VERSION,
-                "status": "ready" if model_service.model_exists else "model-missing",
-                "mode": "CPU (llama.cpp)",
-                "context_window": settings.n_ctx,
-                "model_loaded": model_service.model_loaded,
-                "load_time_seconds": model_service.load_time_seconds,
-                "endpoints": {
-                    "generate": "POST /generate",
-                    "stream": "POST /generate/stream",
-                    "health": "GET /health",
-                    "info": "GET /info",
-                },
-            }
-        )
+        return JSONResponse({
+            "name": APP_NAME,
+            "creator": CREATOR,
+            "version": APP_VERSION,
+            "status": "ready" if model_service.model_exists else "model-missing",
+            "mode": f"{'GPU' if settings.n_gpu_layers > 0 else 'CPU'} (llama.cpp)",
+            "gpu_layers": settings.n_gpu_layers,
+            "context_window": settings.n_ctx,
+            "model_loaded": model_service.model_loaded,
+            "load_time_seconds": model_service.load_time_seconds,
+            "endpoints": {
+                "generate": "POST /generate",
+                "stream": "POST /generate/stream",
+                "health": "GET /health",
+                "info": "GET /info",
+            },
+        })
 
     return app
 
@@ -335,9 +399,12 @@ def main() -> None:
     print("=" * 50)
     print(APP_NAME.upper())
     print(f"Creator: {CREATOR}")
+    print(f"Version: {APP_VERSION}")
     print("=" * 50)
     print(f"Frontend: {settings.frontend_path}")
     print(f"Model: {settings.model_path}")
+    print(f"GPU layers: {settings.n_gpu_layers}")
+    print(f"Workers: {settings.workers}")
     print(f"Open: http://localhost:{settings.port}")
     print(f"API: http://localhost:{settings.port}/info")
 

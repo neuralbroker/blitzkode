@@ -30,14 +30,14 @@ base_model:
 | Property | Value |
 |----------|-------|
 | **Model Name** | BlitzKode |
-| **Version** | 1.6 (CPU optimized) |
+| **Version** | 2.0 |
 | **Base Model** | Qwen/Qwen2.5-1.5B-Instruct |
 | **Model Format** | GGUF (F16, ~3GB) |
 | **Primary Runtime** | llama.cpp / llama-cpp-python |
 | **Artifact** | `blitzkode.gguf` |
 | **Context Window** | 2048 tokens |
 | **Creator** | Sajad |
-| **License** | MIT |
+| **License** | MIT (also see Qwen2.5 upstream license) |
 
 ---
 
@@ -47,7 +47,7 @@ base_model:
 - **Architecture**: Qwen2
 - **Quantization**: GGUF F16 (~3GB)
 - **Vocabulary**: 151,936 tokens
-- **Inference**: CPU-optimized with llama.cpp
+- **Inference**: CPU/GPU with llama.cpp (configurable via BLITZKODE_GPU_LAYERS)
 
 ---
 
@@ -58,8 +58,8 @@ BlitzKode was fine-tuned through a 4-stage pipeline:
 ### 1. SFT (Supervised Fine-Tuning)
 Applies LoRA fine-tuning to coding-style prompts and responses using PEFT library.
 
-### 2. GRPO (Group Relative Policy Optimization)
-Uses heuristic reward functions for code correctness, formatting, and reasoning.
+### 2. Reward-based SFT continuation
+Applies additional SFT with heuristic reward functions for code correctness, formatting, and reasoning. Note: this stage uses standard SFT training, not a full GRPO implementation.
 
 ### 3. DPO (Direct Preference Optimization)
 Trains on handcrafted preference pairs to improve clarity and answer quality.

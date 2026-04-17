@@ -118,7 +118,7 @@ def main():
         lr_scheduler_type="cosine",
         report_to="none",
         optim="paged_adamw_32bit",
-        max_steps=4,
+        max_steps=100,
     )
     
     from transformers import Trainer

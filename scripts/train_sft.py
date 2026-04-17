@@ -58,7 +58,7 @@ def download_datasets():
         
         # Trees
         {"prompt": "Write Python for binary tree inorder traversal (recursive).",
-         "response": "```python\ndef inorder(root, res=[]):\n    if root:\n        inorder(root.left, res)\n        res.append(root.val)\n        inorder(root.right, res)\n    return res\n```\n\nTime: O(n), Space: O(n)"},
+         "response": "```python\ndef inorder(root, res=None):\n    if res is None: res=[]\n    if root:\n        inorder(root.left, res)\n        res.append(root.val)\n        inorder(root.right, res)\n    return res\n```\n\nTime: O(n), Space: O(n)"},
         
         {"prompt": "Write Python to find maximum depth of binary tree.",
          "response": "```python\ndef max_depth(root):\n    if not root:\n        return 0\n    return 1 + max(max_depth(root.left), max_depth(root.right))\n```\n\nTime: O(n), Space: O(n)"},

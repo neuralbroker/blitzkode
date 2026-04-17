@@ -47,7 +47,7 @@ def load_datasets(sample_size=10000):
         print("\nUsing fallback dataset...")
         fallback = [
             format_sample("Write a function to calculate factorial", "def factorial(n):\n    if n <= 1:\n        return 1\n    return n * factorial(n-1)"),
-            format_sample("Implement binary search", "def binary_search(arr, target):\n    left, right = 0, len(arr) - 1\n    while left <= right:\n        mid = (left + right) // 2\n        if arr[mid]            return mid\n == target:\n        elif arr[mid] < target:\n            left = mid + 1\n        else:\n            right = mid - 1\n    return -1"),
+            format_sample("Implement binary search", "def binary_search(arr, target):\n    left, right = 0, len(arr) - 1\n    while left <= right:\n        mid = (left + right) // 2\n        if arr[mid] == target:\n            return mid\n\n        elif arr[mid] < target:\n            left = mid + 1\n        else:\n            right = mid - 1\n    return -1"),
         ]
         all_datasets.append(Dataset.from_list(fallback * 1000))
     

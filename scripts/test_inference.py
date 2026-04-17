@@ -76,7 +76,8 @@ def main() -> None:
     print(f"\nPrompt: {args.prompt}\n")
     print("Response:")
 
-    inputs = tokenizer(args.prompt, return_tensors="pt").to(model.device)
+    chatml_prompt = f"<|im_start|>user\n{args.prompt}<|im_end|>\n<|im_start|>assistant\n"
+    inputs = tokenizer(chatml_prompt, return_tensors="pt").to(model.device)
     with torch.no_grad():
         outputs = model.generate(
             **inputs,

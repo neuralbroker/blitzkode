@@ -1,3 +1,4 @@
+# NOTE: This script uses standard SFT training, not actual GRPO. The reward functions are defined for reference but not used in the training loop.
 #!/usr/bin/env python3
 """
 Stage 2: GRPO Training (Group Relative Policy Optimization)

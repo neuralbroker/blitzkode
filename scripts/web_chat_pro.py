@@ -382,10 +382,11 @@ with gr.Blocks(css=CSS, theme=gr.themes.Soft()) as demo:
                 )
                  
                 gr.HTML("<h3>💡 Examples</h3>")
-                for ex in EXAMPLES:
-                    gr.Button(ex, variant="secondary", size="sm").click(
-                        fn=lambda x: x,
-                        inputs=[gr.Number(label=str(i))],
+                for i, ex in enumerate(EXAMPLES):
+                    btn = gr.Button(ex, variant="secondary", size="sm")
+                    btn.click(
+                        fn=lambda e=ex: e,
+                        inputs=[],
                         outputs=prompt_input,
                     )
     
