@@ -14,7 +14,7 @@ os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 os.environ["HF_HOME"] = "C:/Dev/Projects/BlitzKode/models"
 
 BLITZKODE_BASE = Path("C:/Dev/Projects/BlitzKode")
-HF_REPO = "sajadkoder/blitzkode-1.5b-sft-v1"
+HF_REPO = \"neuralbroker/blitzkode-1.5b-sft-v1\"
 CHECKPOINT_DIR = BLITZKODE_BASE / "checkpoints" / "sft-1.5b-v1"
 MODEL_NAME = "C:/Dev/Projects/BlitzKode/models/qwen1.5b"
 

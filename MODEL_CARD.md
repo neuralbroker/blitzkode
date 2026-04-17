@@ -20,8 +20,8 @@ base_model:
 
 **BlitzKode** is a fine-tuned AI coding assistant built by **Sajad** using the Qwen2.5-1.5B base model. It's packaged as a GGUF format model for fast local inference with llama.cpp.
 
-> Created by [Abdulla Sajad](https://github.com/sajadkoder)  
-> Project: [sajadkoder/blitzkode](https://github.com/sajadkoder/blitzkode)
+> Created by [Abdulla Sajad](https://github.com/neuralbroker)  
+> Project: [neuralbroker/blitzkode](https://github.com/neuralbroker/blitzkode)
 
 ---
 
@@ -257,8 +257,8 @@ Also comply with upstream Qwen base model license when redistributing.
 
 ## Contact
 
-- **GitHub**: https://github.com/sajadkoder/blitzkode
-- **Portfolio**: https://sajadkoder.vercel.app
+- **GitHub**: https://github.com/neuralbroker/blitzkode
+- **Portfolio**: https://neuralbroker.vercel.app
 - Issues and contributions welcome!
 
 ---
@@ -270,6 +270,6 @@ Also comply with upstream Qwen base model license when redistributing.
   author = {Sajad},
   title = {BlitzKode - AI Coding Assistant},
   year = {2026},
-  url = {https://github.com/sajadkoder/blitzkode}
+  url = {https://github.com/neuralbroker/blitzkode}
 }
 ```
