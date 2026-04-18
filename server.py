@@ -37,9 +37,14 @@ DEFAULT_FRONTEND_PATH = ROOT_DIR / "frontend" / "index.html"
 DEFAULT_CONTEXT = 2048
 DEFAULT_MAX_PROMPT_LENGTH = 4000
 DEFAULT_MAX_TOKENS = 512
+STOP_TOKENS = ["<|im_end|>", "<|im_start|>user"]
 
-SYSTEM_PROMPT = """<|im_start|>system
-You are BlitzKode, an AI coding assistant created by Sajad. You are an expert in Python, JavaScript, Java, C++, and other programming languages. Write clean, efficient, and well-documented code. Keep responses concise and practical.<|im_end|>"""
+SYSTEM_PROMPT = (
+    "<|im_start|>system\n"
+    "You are BlitzKode, an AI coding assistant created by Sajad. "
+    "You are an expert in Python, JavaScript, Java, C++, and other programming languages. "
+    "Write clean, efficient, and well-documented code. Keep responses concise and practical.<|im_end|>"
+)
 
 logger = logging.getLogger("blitzkode")
 
@@ -61,6 +66,18 @@ def _int_from_env(name: str, default: int) -> int:
         return default
 
 
+def _validate_prompt(prompt: str, max_length: int) -> tuple[str, JSONResponse | None]:
+    prompt = prompt.strip()
+    if not prompt:
+        return prompt, JSONResponse({"error": "Prompt is required"}, status_code=400)
+    if len(prompt) > max_length:
+        return prompt, JSONResponse(
+            {"error": f"Prompt too long. Max {max_length} chars."},
+            status_code=400,
+        )
+    return prompt, None
+
+
 @dataclass(slots=True)
 class Settings:
     root_dir: Path = ROOT_DIR
@@ -70,10 +87,7 @@ class Settings:
     port: int = _int_from_env("BLITZKODE_PORT", 7860)
     n_gpu_layers: int = _int_from_env("BLITZKODE_GPU_LAYERS", 0)
     n_ctx: int = _int_from_env("BLITZKODE_N_CTX", DEFAULT_CONTEXT)
-    n_threads: int = _int_from_env(
-        "BLITZKODE_THREADS",
-        max(1, min(8, os.cpu_count() or 1)),
-    )
+    n_threads: int = _int_from_env("BLITZKODE_THREADS", max(1, min(8, os.cpu_count() or 1)))
     n_batch: int = _int_from_env("BLITZKODE_BATCH", 128)
     max_prompt_length: int = _int_from_env("BLITZKODE_MAX_PROMPT_LENGTH", DEFAULT_MAX_PROMPT_LENGTH)
     preload_model: bool = _bool_from_env("BLITZKODE_PRELOAD_MODEL", default=False)
@@ -158,23 +172,15 @@ class ModelService:
 
     def build_prompt(self, req: GenerateRequest) -> str:
         parts = [SYSTEM_PROMPT]
-
-        if req.messages:
-            for msg in req.messages:
-                if msg.role in ("user", "assistant"):
-                    parts.append(f"<|im_start|>{msg.role}\n{msg.content}<|im_end|>")
-
+        for msg in req.messages:
+            if msg.role in ("user", "assistant"):
+                parts.append(f"<|im_start|>{msg.role}\n{msg.content}<|im_end|>")
         parts.append(f"<|im_start|>user\n{req.prompt}<|im_end|>")
         parts.append("<|im_start|>assistant\n")
         return "\n".join(parts)
 
-    def generate_once(self, req: GenerateRequest) -> dict[str, object]:
-        llm = self.load_model()
-        full_prompt = self.build_prompt(req)
-        start = time.perf_counter()
-
-        result = llm(
-            full_prompt,
+    def _gen_params(self, req: GenerateRequest) -> dict:
+        return dict(
             max_tokens=req.max_tokens,
             temperature=req.temperature,
             top_p=req.top_p,
@@ -182,39 +188,27 @@ class ModelService:
             repeat_penalty=req.repeat_penalty,
             frequency_penalty=0.0,
             presence_penalty=0.0,
-            stop=["<|im_end|>", "<|im_start|>user"],
+            stop=STOP_TOKENS,
         )
 
+    def generate_once(self, req: GenerateRequest) -> dict[str, object]:
+        llm = self.load_model()
+        start = time.perf_counter()
+
+        result = llm(self.build_prompt(req), **self._gen_params(req))
         response = result["choices"][0]["text"].strip()
         elapsed = time.perf_counter() - start
         logger.info("Generated %d chars in %.2fs", len(response), elapsed)
 
-        return {
-            "response": response,
-            "creator": CREATOR,
-            "model": APP_NAME,
-            "version": APP_VERSION,
-        }
+        return {"response": response, "creator": CREATOR, "model": APP_NAME, "version": APP_VERSION}
 
     def stream_tokens(self, req: GenerateRequest) -> Iterator[str]:
         llm = self.load_model()
-        full_prompt = self.build_prompt(req)
         start = time.perf_counter()
         token_count = 0
 
         try:
-            for token in llm(
-                full_prompt,
-                max_tokens=req.max_tokens,
-                temperature=req.temperature,
-                top_p=req.top_p,
-                top_k=req.top_k,
-                repeat_penalty=req.repeat_penalty,
-                frequency_penalty=0.0,
-                presence_penalty=0.0,
-                stop=["<|im_end|>", "<|im_start|>user"],
-                stream=True,
-            ):
+            for token in llm(self.build_prompt(req), stream=True, **self._gen_params(req)):
                 if not token.get("choices"):
                     continue
                 text = token["choices"][0].get("text", "")
@@ -233,10 +227,7 @@ def _check_api_key(request: Request, settings: Settings) -> JSONResponse | None:
     if not settings.api_key:
         return None
     auth = request.headers.get("Authorization", "")
-    if auth.startswith("Bearer "):
-        token = auth[7:]
-    else:
-        token = auth
+    token = auth[7:] if auth.startswith("Bearer ") else auth
     if token != settings.api_key:
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
     return None
@@ -247,11 +238,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     model_service = ModelService(settings)
     executor = ThreadPoolExecutor(max_workers=settings.workers)
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(name)s] %(message)s",
-        datefmt="%H:%M:%S",
-    )
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message)s", datefmt="%H:%M:%S")
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -260,7 +247,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 await asyncio.to_thread(model_service.load_model)
             except Exception:
                 pass
-
         try:
             yield
         finally:
@@ -272,12 +258,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.executor = executor
 
     cors_origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=cors_origins,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+    app.add_middleware(CORSMiddleware, allow_origins=cors_origins, allow_methods=["*"], allow_headers=["*"])
 
     @app.get("/")
     async def root():
@@ -290,7 +271,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         status = "healthy"
         if not settings.frontend_path.exists() or not model_service.model_exists:
             status = "degraded"
-
         return JSONResponse({
             "status": status,
             "model_loaded": model_service.model_loaded,
@@ -308,25 +288,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if auth_err:
             return auth_err
 
-        prompt = req.prompt.strip()
-        if not prompt:
-            return JSONResponse({"error": "Prompt is required"}, status_code=400)
-
-        if len(prompt) > settings.max_prompt_length:
-            return JSONResponse(
-                {"error": f"Prompt too long. Max {settings.max_prompt_length} chars."},
-                status_code=400,
-            )
-
-        sanitized_request = req.model_copy(update={"prompt": prompt})
+        prompt, err = _validate_prompt(req.prompt, settings.max_prompt_length)
+        if err:
+            return err
 
         try:
-            loop = asyncio.get_running_loop()
-            payload = await loop.run_in_executor(
-                executor,
-                model_service.generate_once,
-                sanitized_request,
-            )
+            sanitized = req.model_copy(update={"prompt": prompt})
+            payload = await asyncio.get_running_loop().run_in_executor(executor, model_service.generate_once, sanitized)
             return JSONResponse(payload)
         except FileNotFoundError as exc:
             return JSONResponse({"error": str(exc)}, status_code=503)
@@ -339,33 +307,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if auth_err:
             return auth_err
 
-        prompt = req.prompt.strip()
-        if not prompt:
-            return JSONResponse({"error": "Prompt is required"}, status_code=400)
-
-        if len(prompt) > settings.max_prompt_length:
-            return JSONResponse(
-                {"error": f"Prompt too long. Max {settings.max_prompt_length} chars."},
-                status_code=400,
-            )
-
-        sanitized_request = req.model_copy(update={"prompt": prompt})
+        prompt, err = _validate_prompt(req.prompt, settings.max_prompt_length)
+        if err:
+            return err
 
         if not model_service.model_exists:
-            return JSONResponse(
-                {"error": f"Model not found at {settings.model_path}"},
-                status_code=503,
-            )
+            return JSONResponse({"error": f"Model not found at {settings.model_path}"}, status_code=503)
 
-        headers = {
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        }
+        sanitized = req.model_copy(update={"prompt": prompt})
         return StreamingResponse(
-            model_service.stream_tokens(sanitized_request),
+            model_service.stream_tokens(sanitized),
             media_type="text/event-stream",
-            headers=headers,
+            headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
         )
 
     @app.get("/info")
@@ -395,20 +348,17 @@ app = create_app()
 
 
 def main() -> None:
-    settings = app.state.settings
-    print("=" * 50)
-    print(APP_NAME.upper())
+    s = app.state.settings
+    print(f"\n{'=' * 50}")
+    print(f"{APP_NAME.upper()} v{APP_VERSION}")
     print(f"Creator: {CREATOR}")
-    print(f"Version: {APP_VERSION}")
-    print("=" * 50)
-    print(f"Frontend: {settings.frontend_path}")
-    print(f"Model: {settings.model_path}")
-    print(f"GPU layers: {settings.n_gpu_layers}")
-    print(f"Workers: {settings.workers}")
-    print(f"Open: http://localhost:{settings.port}")
-    print(f"API: http://localhost:{settings.port}/info")
+    print(f"{'=' * 50}")
+    print(f"Model:  {s.model_path}")
+    print(f"GPU:    {s.n_gpu_layers} layers")
+    print(f"Ctx:    {s.n_ctx} | Threads: {s.n_threads} | Workers: {s.workers}")
+    print(f"URL:    http://localhost:{s.port}\n")
 
-    uvicorn.run(app, host=settings.host, port=settings.port, log_level="warning")
+    uvicorn.run(app, host=s.host, port=s.port, log_level="warning")
 
 
 if __name__ == "__main__":
