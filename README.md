@@ -1,3 +1,22 @@
+---
+language:
+- en
+license: mit
+library_name: llama-cpp-python
+pipeline_tag: text-generation
+tags:
+- code-generation
+- coding-assistant
+- gguf
+- llama.cpp
+- qwen2.5
+- python
+- javascript
+- fine-tuned
+base_model:
+- Qwen/Qwen2.5-1.5B-Instruct
+---
+
 # BlitzKode
 
 BlitzKode is a local AI coding assistant that runs entirely on your machine. It generates code in Python, JavaScript, Java, C++, and other languages through a web interface or API. The model is fine-tuned from Qwen2.5-1.5B and quantized to GGUF format for fast inference.
@@ -108,24 +127,25 @@ blitzkode/
 ├── server.py              # FastAPI backend, main entry point
 ├── blitzkode.gguf         # Quantized model file (~3GB)
 ├── Dockerfile             # Docker container
+├── docker-compose.yml     # Docker Compose setup
 ├── requirements.txt       # Serving dependencies
 ├── requirements-training.txt  # Training dependencies
 ├── LICENSE                # MIT License
 ├── .env.example           # Environment variable template
+├── pyproject.toml         # Linting/formatting config (ruff, mypy)
 ├── frontend/
 │   └── index.html         # Web UI (HTML/CSS/JS)
 ├── tests/
 │   └── test_server.py     # HTTP endpoint tests
 ├── scripts/
 │   ├── train_sft.py       # Supervised fine-tuning (LoRA)
-│   ├── train_grpo.py      # Reward-based SFT continuation
+│   ├── train_reward_sft.py # Reward-based SFT continuation
 │   ├── train_dpo.py       # Direct Preference Optimization
 │   ├── export_gguf.py     # Merge checkpoints and export GGUF
 │   └── test_inference.py  # Direct model inference test
 ├── checkpoints/           # Trained LoRA adapter checkpoints
 ├── exported/              # Merged model for GGUF export
-├── datasets/
-│   └── raw/               # Training datasets
+├── datasets/              # Training datasets
 ├── models/                # Base model files
 ├── .github/workflows/
 │   └── ci.yml             # GitHub Actions CI
@@ -143,13 +163,15 @@ blitzkode/
 | BLITZKODE_N_CTX | 2048 | Context window size | 4096 |
 | BLITZKODE_THREADS | auto | CPU threads for inference | 8 |
 | BLITZKODE_BATCH | 128 | Batch size for processing | 256 |
-| BLITZKODE_WORKERS | 2 | Concurrent request workers | 4 |
 | BLITZKODE_MODEL_PATH | blitzkode.gguf | Path to model file | /path/to/model.gguf |
 | BLITZKODE_FRONTEND_PATH | frontend/index.html | Path to frontend file | ./ui.html |
 | BLITZKODE_MAX_PROMPT_LENGTH | 4000 | Max prompt characters | 8000 |
 | BLITZKODE_PRELOAD_MODEL | false | Load model on startup | true |
 | BLITZKODE_CORS_ORIGINS | * | CORS origins (comma-separated) | http://localhost:3000 |
 | BLITZKODE_API_KEY | empty | API key (empty=disabled) | my-secret-key |
+| BLITZKODE_RATE_LIMIT | true | Enable rate limiting | false |
+| BLITZKODE_RATE_LIMIT_MAX | 5 | Max requests per IP per minute | 10 |
+| BLITZKODE_MAX_REQUEST_BYTES | 50000 | Max request body size | 100000 |
 
 ## Tests
 

@@ -407,6 +407,7 @@
         var temperature = 0.5;
         var maxTokens = 256;
         var isSending = false;
+        var maxHistoryMessages = 16;
 
         if (typeof marked !== 'undefined') {
             marked.setOptions({
@@ -437,8 +438,13 @@
                 if (!res.ok) throw new Error('failed');
                 var data = await res.json();
                 if (data.status === 'healthy' && data.model_exists) {
-                    modelStatus.classList.remove('offline');
-                    modelStatus.innerHTML = '<span class="status-dot"></span> Ready';
+                    if (data.busy) {
+                        modelStatus.classList.remove('offline');
+                        modelStatus.innerHTML = '<span class="status-dot" style="animation: none; background: #f59e0b;"></span> Busy';
+                    } else {
+                        modelStatus.classList.remove('offline');
+                        modelStatus.innerHTML = '<span class="status-dot"></span> Ready';
+                    }
                 } else {
                     modelStatus.classList.add('offline');
                     modelStatus.innerHTML = '<span class="status-dot"></span> Model missing';
@@ -459,23 +465,31 @@
             sidebarOverlay.classList.remove('active');
         }
 
-        function saveChat() {
+        function saveConversation() {
             try {
-                localStorage.setItem('blitzkode_chat', chat.innerHTML);
-                localStorage.setItem('blitzkode_history', JSON.stringify(conversationHistory));
+                var toSave = { messages: conversationHistory, temperature: temperature, maxTokens: maxTokens };
+                localStorage.setItem('blitzkode_conversation', JSON.stringify(toSave));
             } catch (e) {}
         }
 
-        function loadChat() {
+        function loadConversation() {
             try {
-                var saved = localStorage.getItem('blitzkode_chat');
-                var history = localStorage.getItem('blitzkode_history');
-                if (saved && saved.indexOf('message') !== -1) {
-                    chat.innerHTML = saved;
-                    if (history) conversationHistory = JSON.parse(history);
-                    addCopyButtons();
-                    return true;
+                var raw = localStorage.getItem('blitzkode_conversation');
+                if (!raw) return false;
+                var saved = JSON.parse(raw);
+                if (!saved.messages || !Array.isArray(saved.messages) || saved.messages.length === 0) return false;
+                conversationHistory = saved.messages.slice(-maxHistoryMessages);
+                temperature = saved.temperature || 0.5;
+                maxTokens = saved.maxTokens || 256;
+                document.getElementById('tempSlider').value = temperature;
+                document.getElementById('tempVal').textContent = temperature;
+                document.getElementById('tokensSlider').value = maxTokens;
+                document.getElementById('tokensVal').textContent = maxTokens;
+                for (var i = 0; i < conversationHistory.length; i++) {
+                    addMessage(conversationHistory[i].role, conversationHistory[i].content, true);
                 }
+                chat.scrollTop = chat.scrollHeight;
+                return true;
             } catch (e) {}
             return false;
         }
@@ -486,8 +500,7 @@
             var clone = emptyEl.cloneNode(true);
             clone.style.display = '';
             chat.appendChild(clone);
-            localStorage.removeItem('blitzkode_chat');
-            localStorage.removeItem('blitzkode_history');
+            localStorage.removeItem('blitzkode_conversation');
             promptInput.value = '';
             promptInput.style.height = 'auto';
             promptInput.focus();
@@ -541,7 +554,7 @@
             }
         }
 
-        function addMessage(role, content) {
+        function addMessage(role, content, skipSave) {
             if (emptyEl && emptyEl.parentNode) emptyEl.parentNode.removeChild(emptyEl);
 
             var div = document.createElement('div');
@@ -553,7 +566,7 @@
 
             if (role === 'assistant') addCopyButtons();
             chat.scrollTop = chat.scrollHeight;
-            saveChat();
+            if (!skipSave) saveConversation();
         }
 
         function updateAssistantContent(contentEl, text, isStreaming) {
@@ -592,6 +605,7 @@
 
             var contentEl = assistantDiv.querySelector('.message-content');
             var fullText = '';
+            var sentMessages = conversationHistory.slice(-maxHistoryMessages);
 
             try {
                 var res = await fetch('/generate/stream', {
@@ -599,7 +613,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         prompt: prompt,
-                        messages: conversationHistory.slice(-8),
+                        messages: sentMessages.slice(0, -1),
                         temperature: temperature,
                         max_tokens: maxTokens,
                     }),
@@ -654,7 +668,10 @@
 
                 updateAssistantContent(contentEl, fullText, false);
                 conversationHistory.push({ role: 'assistant', content: fullText });
-                saveChat();
+                if (conversationHistory.length > maxHistoryMessages * 2) {
+                    conversationHistory = conversationHistory.slice(-maxHistoryMessages);
+                }
+                saveConversation();
 
             } catch (e) {
                 contentEl.innerHTML = '<p style="color: #ef4444;">Error: ' + escapeHtml(e.message) + '</p>';
@@ -668,9 +685,9 @@
             isSending = false;
         }
 
-        if (!loadChat()) {
-            refreshStatus();
-        } else {
+        refreshStatus();
+        setInterval(refreshStatus, 30000);
+        if (!loadConversation()) {
             refreshStatus();
         }
     </script>

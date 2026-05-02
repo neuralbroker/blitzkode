@@ -234,7 +234,7 @@ def main():
     
     print(f"\n[SFT COMPLETE]")
     print(f"  Saved to: {CHECKPOINT_DIR / 'final'}")
-    print("\nNEXT: python scripts/train_grpo.py")
+    print("\nNEXT: python scripts/train_reward_sft.py")
 
 if __name__ == "__main__":
     main()

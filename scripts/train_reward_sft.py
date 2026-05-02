@@ -1,8 +1,10 @@
-# NOTE: This script uses standard SFT training, not actual GRPO. The reward functions are defined for reference but not used in the training loop.
 #!/usr/bin/env python3
 """
-Stage 2: GRPO Training (Group Relative Policy Optimization)
-Uses TRL's GRPOTrainer for reasoning-focused RL training.
+Stage 2: Reward-Based SFT Training (previously mislabeled as GRPO)
+
+NOTE: This script uses standard SFT training, not actual GRPO.
+The reward functions are defined for reference but not used in training.
+For real GRPO, use train/train_grpo.py or trl.GRPOTrainer.
 """
 
 import os

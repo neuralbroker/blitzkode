@@ -115,63 +115,17 @@ Custom curated coding datasets covering:
 
 ---
 
-## API & Usage
+## Usage
 
-### Running the Server
+See the [project README](https://github.com/neuralbroker/blitzkode) for full setup instructions, API reference, Docker deployment, and environment variable configuration.
+
+### Quick Start
 
 ```bash
-# Install dependencies
 pip install llama-cpp-python fastapi uvicorn pydantic
-
-# Start server
 python server.py
-
-# Open browser
-# http://localhost:7860
+# Open http://localhost:7860
 ```
-
-### API Endpoints
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/` | GET | Web UI |
-| `/health` | GET | Health check |
-| `/info` | GET | API info |
-| `/generate` | POST | Generate response |
-| `/generate/stream` | POST | Stream tokens |
-
-### API Example
-
-```bash
-# Generate code
-curl -X POST http://localhost:7860/generate \
-  -H "Content-Type: application/json" \
-  -d '{"prompt": "Write hello world in python"}'
-```
-
-### Python Usage
-
-```python
-from llama_cpp import Llama
-
-llm = Llama(
-    model_path="blitzkode.gguf",
-    n_ctx=2048,
-    n_threads=8,
-)
-
-prompt = """<|im_start|>system
-You are BlitzKode, a coding assistant.<|im_end|>
-<|im_start|>user
-Write a hello world in Python<|im_end|>
-<|im_start|>assistant
-"""
-
-result = llm(prompt, max_tokens=256)
-print(result["choices"][0]["text"])
-```
-
----
 
 ## Prompt Format
 
@@ -184,23 +138,6 @@ You are BlitzKode, an AI coding assistant created by Sajad. You are an expert in
 {your prompt}<|im_end|>
 <|im_start|>assistant
 ```
-
----
-
-## Configuration
-
-The server supports environment variables:
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `BLITZKODE_MODEL_PATH` | `blitzkode.gguf` | Model file path |
-| `BLITZKODE_FRONTEND_PATH` | `frontend/index.html` | UI path |
-| `BLITZKODE_HOST` | `0.0.0.0` | Server host |
-| `BLITZKODE_PORT` | `7860` | Server port |
-| `BLITZKODE_THREADS` | CPU count | CPU threads |
-| `BLITZKODE_N_CTX` | `2048` | Context window |
-| `BLITZKODE_BATCH` | `128` | Batch size |
-| `BLITZKODE_MAX_PROMPT_LENGTH` | `4000` | Max prompt chars |
 
 ---
 
@@ -217,33 +154,21 @@ The server supports environment variables:
 
 ```
 BlitzKode/
-├── server.py              # FastAPI backend (v1.6)
+├── server.py              # FastAPI backend
 ├── blitzkode.gguf         # Quantized model (~3GB)
-├── frontend/
-│   └── index.html        # Web UI
-├── tests/
-│   └── test_server.py    # HTTP tests
-├── scripts/
+├── frontend/index.html    # Web UI
+├── tests/test_server.py  # HTTP tests
+├── scripts/               # Training + dataset scripts
 │   ├── train_sft.py       # SFT training
-│   ├── train_grpo.py     # GRPO training
-│   ├── train_dpo.py      # DPO training
-│   ├── export_gguf.py    # Model export
-│   └── test_inference.py # Inference test
-├── checkpoints/          # LoRA checkpoints
-├── datasets/             # Training data
-├── MODEL_CARD.md         # This file
-└── README.md             # Project docs
+│   ├── train_reward_sft.py # Reward-based SFT continuation
+│   ├── train_dpo.py       # DPO training
+│   ├── export_gguf.py     # Model export
+│   └── test_inference.py  # Inference test
+├── datasets/              # Training data
+└── README.md              # Full project docs
 ```
 
----
-
-## Version History
-
-| Version | Date | Changes |
-|---------|------|---------|
-| 1.6 | Current | CPU optimization, faster inference |
-| 1.5 | Earlier | Added streaming support |
-| 1.0 | Initial | Base model release |
+Full project documentation: [README.md](https://github.com/neuralbroker/blitzkode)
 
 ---
 

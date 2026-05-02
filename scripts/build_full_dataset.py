@@ -5,6 +5,7 @@ Gathers training data from HuggingFace, generates coding problems, etc.
 """
 
 import json
+from bisect import bisect_left
 from pathlib import Path
 from datetime import datetime
 
@@ -222,7 +223,7 @@ def generate_comprehensive_problems():
          "response": "```python\ndef subsets(nums):\n    res = []\n    def backtrack(i, path):\n        res.append(path[:])\n        for j in range(i, len(nums)):\n            path.append(nums[j])\n            backtrack(j+1, path)\n            path.pop()\n    backtrack(0, [])\n    return res\n```\nTime O(n*2^n), Space O(n)"},
         
         {"prompt": "N-Queens: Place N queens on NxN board",
-         "response": "```python\ndef solve_n_queens(n):\n    res = []\n    cols = set()\n    pos_diag = set()\n    neg_diag = set()\n    board = [['.'*n for _ in range(n)]\n    def backtrack(row):\n        if row == n:\n            res.append([''.join(row) for row in board])\n            return\n        for col in range(n):\n            if col in cols or row-col in pos_diag or row+col in neg_diag:\n                continue\n            board[row][col] = 'Q'\n            cols.add(col); pos_diag.add(row-col); neg_diag.add(row+col)\n            backtrack(row+1)\n            board[row][col] = '.'\n            cols.remove(col); pos_diag.remove(row-col); neg_diag.remove(row+col)\n    backtrack(0)\n    return res\n```\nTime O(N!), Space O(N)"},
+          "response": "```python\ndef solve_n_queens(n):\n    res = []\n    cols = set()\n    pos_diag = set()\n    neg_diag = set()\n    board = [['.' for _ in range(n)] for _ in range(n)]\n    def backtrack(row):\n        if row == n:\n            res.append([''.join(row) for row in board])\n            return\n        for col in range(n):\n            if col in cols or row-col in pos_diag or row+col in neg_diag:\n                continue\n            board[row][col] = 'Q'\n            cols.add(col); pos_diag.add(row-col); neg_diag.add(row+col)\n            backtrack(row+1)\n            board[row][col] = '.'\n            cols.remove(col); pos_diag.remove(row-col); neg_diag.remove(row+col)\n    backtrack(0)\n    return res\n```\nTime O(N!), Space O(N)"},
         
         {"prompt": "Combination Sum: Find all combinations that sum to target",
          "response": "```python\ndef combination_sum(candidates, target):\n    res = []\n    candidates.sort()\n    def backtrack(i, path, remain):\n        if remain == 0: res.append(path[:])\n        if remain < 0: return\n        for j in range(i, len(candidates)):\n            path.append(candidates[j])\n            backtrack(j, path, remain-candidates[j])\n            path.pop()\n    backtrack(0, [], target)\n    return res\n```\nTime O(2^n), Space O(n)"},

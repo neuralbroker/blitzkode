@@ -1,3 +1,4 @@
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -9,8 +10,8 @@ import server
 
 
 class FakeLlama:
-    init_calls = []
-    call_history = []
+    init_calls: list = []
+    call_history: list = []
 
     def __init__(self, **kwargs):
         self.kwargs = kwargs
@@ -31,7 +32,6 @@ class FakeLlama:
                     {"choices": [{"text": " world"}]},
                 ]
             )
-
         return {"choices": [{"text": "  hello world  "}]}
 
 
@@ -47,8 +47,18 @@ class ServerTestCase(unittest.IsolatedAsyncioTestCase):
         self.frontend_path = self.frontend_dir / "index.html"
         self.frontend_path.write_text("<html><body>BlitzKode</body></html>", encoding="utf-8")
         self.model_path = self.root / "blitzkode.gguf"
+        self._orig_env = dict(os.environ)
 
-    async def make_client(self, with_model=True, api_key=""):
+    def _clear_rate_limit_env(self):
+        for k in ("BLITZKODE_RATE_LIMIT", "BLITZKODE_RATE_LIMIT_MAX", "BLITZKODE_CORS_ORIGINS"):
+            os.environ.pop(k, None)
+
+    async def make_client(self, with_model=True, api_key="", rate_limit=False):
+        self._clear_rate_limit_env()
+        if not rate_limit:
+            os.environ["BLITZKODE_RATE_LIMIT"] = "false"
+        os.environ["BLITZKODE_CORS_ORIGINS"] = "*"
+
         if with_model:
             self.model_path.write_text("fake-model", encoding="utf-8")
         elif self.model_path.exists():
@@ -60,6 +70,7 @@ class ServerTestCase(unittest.IsolatedAsyncioTestCase):
             frontend_path=self.frontend_path,
             preload_model=False,
             api_key=api_key,
+            cors_origins="*",
         )
 
         patcher = patch.object(server.llama_cpp, "Llama", FakeLlama)
@@ -75,7 +86,6 @@ class ServerTestCase(unittest.IsolatedAsyncioTestCase):
     async def test_root_serves_frontend(self):
         client = await self.make_client()
         response = await client.get("/")
-
         self.assertEqual(response.status_code, 200)
         self.assertIn("BlitzKode", response.text)
 
@@ -83,7 +93,6 @@ class ServerTestCase(unittest.IsolatedAsyncioTestCase):
         client = await self.make_client()
         response = await client.get("/health")
         payload = response.json()
-
         self.assertEqual(response.status_code, 200)
         self.assertEqual(payload["status"], "healthy")
         self.assertFalse(payload["model_loaded"])
@@ -94,7 +103,6 @@ class ServerTestCase(unittest.IsolatedAsyncioTestCase):
         client = await self.make_client(with_model=False)
         response = await client.get("/health")
         payload = response.json()
-
         self.assertEqual(payload["status"], "degraded")
         self.assertFalse(payload["model_exists"])
 
@@ -102,11 +110,11 @@ class ServerTestCase(unittest.IsolatedAsyncioTestCase):
         client = await self.make_client()
         response = await client.get("/info")
         payload = response.json()
-
         self.assertEqual(response.status_code, 200)
         self.assertEqual(payload["name"], "BlitzKode")
         self.assertEqual(payload["version"], "2.0")
         self.assertIn("endpoints", payload)
+        self.assertIn("busy", payload)
 
     async def test_generate_uses_stubbed_model(self):
         client = await self.make_client()
@@ -115,7 +123,6 @@ class ServerTestCase(unittest.IsolatedAsyncioTestCase):
             json={"prompt": "  write a loop  ", "max_tokens": 64},
         )
         payload = response.json()
-
         self.assertEqual(response.status_code, 200)
         self.assertEqual(payload["response"], "hello world")
         self.assertEqual(len(FakeLlama.init_calls), 1)
@@ -134,7 +141,6 @@ class ServerTestCase(unittest.IsolatedAsyncioTestCase):
             },
         )
         payload = response.json()
-
         self.assertEqual(response.status_code, 200)
         prompt_used = FakeLlama.call_history[0]["prompt"]
         self.assertIn("<|im_start|>user\nwrite a loop", prompt_used)
@@ -143,7 +149,6 @@ class ServerTestCase(unittest.IsolatedAsyncioTestCase):
     async def test_generate_rejects_blank_prompts(self):
         client = await self.make_client()
         response = await client.post("/generate", json={"prompt": "   "})
-
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()["error"], "Prompt is required")
 
@@ -151,21 +156,18 @@ class ServerTestCase(unittest.IsolatedAsyncioTestCase):
         client = await self.make_client()
         long_prompt = "x" * 5000
         response = await client.post("/generate", json={"prompt": long_prompt})
-
         self.assertEqual(response.status_code, 400)
         self.assertIn("too long", response.json()["error"])
 
     async def test_generate_returns_503_when_model_is_missing(self):
         client = await self.make_client(with_model=False)
         response = await client.post("/generate", json={"prompt": "hello"})
-
         self.assertEqual(response.status_code, 503)
         self.assertIn("Model not found", response.json()["error"])
 
     async def test_stream_endpoint_returns_sse_chunks(self):
         client = await self.make_client()
         response = await client.post("/generate/stream", json={"prompt": "stream please"})
-
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.headers["content-type"].split(";")[0], "text/event-stream")
         self.assertIn('data: {"token": "Hello"}', response.text)
@@ -175,7 +177,6 @@ class ServerTestCase(unittest.IsolatedAsyncioTestCase):
     async def test_stream_503_when_model_missing(self):
         client = await self.make_client(with_model=False)
         response = await client.post("/generate/stream", json={"prompt": "hello"})
-
         self.assertEqual(response.status_code, 503)
 
     async def test_api_key_rejects_invalid(self):
@@ -185,7 +186,6 @@ class ServerTestCase(unittest.IsolatedAsyncioTestCase):
             json={"prompt": "hello"},
             headers={"Authorization": "Bearer wrong"},
         )
-
         self.assertEqual(response.status_code, 401)
 
     async def test_api_key_accepts_valid(self):
@@ -195,13 +195,11 @@ class ServerTestCase(unittest.IsolatedAsyncioTestCase):
             json={"prompt": "hello"},
             headers={"Authorization": "Bearer secret123"},
         )
-
         self.assertEqual(response.status_code, 200)
 
     async def test_no_api_key_required_when_not_set(self):
         client = await self.make_client(api_key="")
         response = await client.post("/generate", json={"prompt": "hello"})
-
         self.assertEqual(response.status_code, 200)
 
     async def test_cors_headers_present(self):
@@ -213,8 +211,19 @@ class ServerTestCase(unittest.IsolatedAsyncioTestCase):
                 "Access-Control-Request-Method": "POST",
             },
         )
-
         self.assertIn("access-control-allow-origin", response.headers)
+
+    async def test_rate_limit_rejects_when_exceeded(self):
+        client = await self.make_client(rate_limit=True)
+        for i in range(6):
+            response = await client.post("/generate", json={"prompt": f"hello {i}"})
+        self.assertEqual(response.status_code, 429)
+
+    async def test_request_size_limit_rejects_large_body(self):
+        client = await self.make_client()
+        long_prompt = "x" * 60000
+        response = await client.post("/generate", json={"prompt": long_prompt})
+        self.assertEqual(response.status_code, 413)
 
 
 if __name__ == "__main__":

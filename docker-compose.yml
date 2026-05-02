@@ -1,0 +1,16 @@
+services:
+  blitzkode:
+    build: .
+    ports:
+      - "7860:7860"
+    volumes:
+      - ./blitzkode.gguf:/app/blitzkode.gguf
+    environment:
+      - BLITZKODE_MODEL_PATH=/app/blitzkode.gguf
+      - BLITZKODE_HOST=0.0.0.0
+      - BLITZKODE_PORT=7860
+      - BLITZKODE_GPU_LAYERS=0
+      - BLITZKODE_THREADS=8
+      - BLITZKODE_N_CTX=2048
+      - BLITZKODE_PRELOAD_MODEL=true
+    restart: unless-stopped
