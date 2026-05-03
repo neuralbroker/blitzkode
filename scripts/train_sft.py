@@ -10,13 +10,14 @@ import json
 import torch
 from pathlib import Path
 
-os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
-os.environ["HF_HOME"] = "C:/Dev/Projects/BlitzKode/models"
+# Resolve paths relative to this script's location
+SCRIPT_DIR = Path(__file__).resolve().parent
+BLITZKODE_BASE = SCRIPT_DIR.parent
+os.environ["HF_HOME"] = str(BLITZKODE_BASE / "models")
 
-BLITZKODE_BASE = Path("C:/Dev/Projects/BlitzKode")
-HF_REPO = \"neuralbroker/blitzkode-1.5b-sft-v1\"
+HF_REPO = "neuralbroker/blitzkode-1.5b-sft-v1"
 CHECKPOINT_DIR = BLITZKODE_BASE / "checkpoints" / "sft-1.5b-v1"
-MODEL_NAME = "C:/Dev/Projects/BlitzKode/models/qwen1.5b"
+MODEL_NAME = str(BLITZKODE_BASE / "models" / "qwen1.5b")
 
 def get_gpu_info():
     if torch.cuda.is_available():

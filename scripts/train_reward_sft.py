@@ -14,10 +14,12 @@ import torch
 import re
 from pathlib import Path
 
+# Resolve paths relative to this script's location
+SCRIPT_DIR = Path(__file__).resolve().parent
+BLITZKODE_BASE = SCRIPT_DIR.parent
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
-os.environ["HF_HOME"] = "C:/Dev/Projects/BlitzKode/models"
+os.environ["HF_HOME"] = str(BLITZKODE_BASE / "models")
 
-BLITZKODE_BASE = Path("C:/Dev/Projects/BlitzKode")
 SFT_CHECKPOINT = BLITZKODE_BASE / "checkpoints" / "sft-1.5b-v1" / "final"
 GRPO_CHECKPOINT = BLITZKODE_BASE / "checkpoints" / "grpo-v1"
 

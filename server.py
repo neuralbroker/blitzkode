@@ -238,7 +238,10 @@ def _check_api_key(request: Request, settings: Settings) -> JSONResponse | None:
         return None
     auth = request.headers.get("Authorization", "")
     token = auth[7:] if auth.startswith("Bearer ") else auth
-    if token != settings.api_key:
+    
+    # Timing-safe comparison (prevent timing attacks)
+    import hmac
+    if not hmac.compare_digest(token, settings.api_key):
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
     return None
 
@@ -250,10 +253,20 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self._window = window_seconds
         self._clients: dict[str, list[float]] = {}
         self._lock = threading.Lock()
+        self._cleanup_done = 0
 
     async def dispatch(self, request: Request, call_next):
         client_ip = request.client.host if request.client else "unknown"
         now = time.monotonic()
+        
+        # Cleanup old entries periodically (every 1000 requests)
+        self._cleanup_done += 1
+        if self._cleanup_done > 1000:
+            self._cleanup_done = 0
+            with self._lock:
+                cutoff = now - self._window
+                self._clients = {ip: [t for t in ts if t >= cutoff] for ip, ts in self._clients.items() if ts}
+        
         with self._lock:
             timestamps = self._clients.get(client_ip, [])
             timestamps = [t for t in timestamps if now - t < self._window]
@@ -265,8 +278,6 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 )
             timestamps.append(now)
             self._clients[client_ip] = timestamps
-            if len(self._clients) > 10_000:
-                self._clients.clear()
         return await call_next(request)
 
 
@@ -376,9 +387,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     daemon=True,
                 )
                 thread.start()
-                loop = asyncio.get_running_loop()
+                # Use thread-safe queue.get() instead of deprecated get_running_loop()
                 while True:
-                    chunk = await loop.run_in_executor(None, token_q.get)
+                    chunk = await asyncio.to_thread(token_q.get)
                     if chunk is None:
                         break
                     yield chunk

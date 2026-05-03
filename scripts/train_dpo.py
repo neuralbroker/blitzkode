@@ -10,10 +10,12 @@ import json
 import torch
 from pathlib import Path
 
-os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
-os.environ["HF_HOME"] = "C:/Dev/Projects/BlitzKode/models"
+SCRIPT_DIR = Path(__file__).resolve().parent
+BLITZKODE_BASE = SCRIPT_DIR.parent
 
-BLITZKODE_BASE = Path("C:/Dev/Projects/BlitzKode")
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+os.environ["HF_HOME"] = str(BLITZKODE_BASE / "models")
+
 GRPO_CHECKPOINT = BLITZKODE_BASE / "checkpoints" / "grpo-v1" / "final"
 DPO_CHECKPOINT = BLITZKODE_BASE / "checkpoints" / "dpo-v1"
 

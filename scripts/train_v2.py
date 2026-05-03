@@ -9,7 +9,9 @@ import torch
 from pathlib import Path
 from datasets import load_dataset, Dataset
 
-BLITZKODE_BASE = Path("C:/Dev/Projects/BlitzKode")
+SCRIPT_DIR = Path(__file__).resolve().parent
+BLITZKODE_BASE = SCRIPT_DIR.parent
+
 MODEL_NAME = "Qwen/Qwen2.5-1.5B-Instruct"
 OUTPUT_DIR = BLITZKODE_BASE / "checkpoints" / "blitzkode-v2"
 

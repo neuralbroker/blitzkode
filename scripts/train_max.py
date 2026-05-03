@@ -11,7 +11,8 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments,
 from peft import LoraConfig, get_peft_model, TaskType
 import gc
 
-BLITZKODE_BASE = Path("C:/Dev/Projects/BlitzKode")
+SCRIPT_DIR = Path(__file__).resolve().parent
+BLITZKODE_BASE = SCRIPT_DIR.parent
 OUTPUT_DIR = BLITZKODE_BASE / "checkpoints" / "blitzkode-v3"
 
 def format_sample(instruction, response):
@@ -391,7 +392,7 @@ print(longest_unique_substring("pwwkew"))    # (3, "wke")"""
 
 def setup_model():
     print("\n[LOADING BASE MODEL]")
-    model_path = "C:/Dev/Projects/BlitzKode/models/qwen1.5b"
+    model_path = str(BLITZKODE_BASE / "models" / "qwen1.5b")
     
     tokenizer = AutoTokenizer.from_pretrained(
         model_path,
